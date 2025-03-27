@@ -1,7 +1,8 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, redirect
 from data import db_session
 from data.users import User
 from data.jobs import Jobs
+from data import login
 
 
 app = Flask(__name__)
@@ -14,6 +15,36 @@ def works():
     session = db_session.create_session()
     jobs = session.query(Jobs)
     return render_template('jobs.html', jobs=jobs)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    form = login.RegisterForm()
+    db_session.global_init("db/mars_explorer.db")
+    session = db_session.create_session()
+    if form.validate_on_submit():
+        if not form.age.data.isdigit():
+            return render_template('register.html',
+                                   agemassage="Неправильно введён возраст",
+                                   form=form)
+        if not form.password1.data == form.password2.data:
+            return render_template('register.html',
+                                   passwordmassage="Пароли не совпадают",
+                                   form=form)
+        user1 = User()
+        user1.name = form.name.data
+        user1.surname = form.surname.data
+        user1.age = int(form.age.data)
+        user1.position = form.position.data
+        user1.speciality = form.speciality.data
+        user1.address = form.address.data
+        user1.email = form.email.data
+        user1.hashed_password = form.password1.data
+
+        session.add(user1)
+        session.commit()
+        return redirect("/login")
+    return render_template('register.html', title='Регистрация', form=form)
+
 
 def main():
     db_session.global_init("db/mars_explorer.db")
