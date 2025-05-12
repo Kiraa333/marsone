@@ -1,5 +1,5 @@
-from flask import Flask, render_template, redirect
-from flask_login import login_user
+from flask import Flask, render_template, redirect, request, abort
+from flask_login import login_user, current_user, login_required
 from flask_login import LoginManager
 from data import db_session
 from data.add_job import AddJobForm
@@ -8,7 +8,6 @@ from data.jobs import Jobs
 from data import register
 from data.login import LoginForm
 from data.register import RegisterForm
-
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'yandexlyceum_secret_key'
@@ -75,6 +74,7 @@ def register():
         return redirect("/login")
     return render_template('register.html', title='Регистрация', form=form)
 
+
 @app.route('/addjob', methods=['GET', 'POST'])
 def addjob():
     add_form = AddJobForm()
@@ -92,10 +92,64 @@ def addjob():
         return redirect('/')
     return render_template('job_add.html', title='Adding a job', form=add_form)
 
+
+@app.route('/editjob/<int:id>', methods=['GET', 'POST'])
+@login_required
+def editjob(id):
+    form = AddJobForm()
+    db_sess = db_session.create_session()
+
+    job = db_sess.query(Jobs).filter(Jobs.id == id,
+                                     (Jobs.team_leader == current_user.id) |
+                                     (current_user.id == 1)
+                                     ).first()
+
+    if not job:
+        abort(404)
+
+    if request.method == "GET":
+        form.job.data = job.job
+        form.team_leader.data = job.team_leader
+        form.work_size.data = job.work_size
+        form.collaborators.data = job.collaborators
+        form.is_finished.data = job.is_finished
+
+    if form.validate_on_submit():
+        job.job = form.job.data
+        job.team_leader = form.team_leader.data
+        job.work_size = form.work_size.data
+        job.collaborators = form.collaborators.data
+        job.is_finished = form.is_finished.data
+        db_sess.commit()
+        return redirect('/')
+
+    return render_template('job_add.html',
+                           title='Редактирование работы',
+                           form=form)
+
+
+@app.route('/deletejob/<int:id>', methods=['GET', 'POST'])
+@login_required
+def deletejob(id):
+    db_sess = db_session.create_session()
+    job = db_sess.query(Jobs).filter(Jobs.id == id,
+                                     (Jobs.team_leader == current_user.id) |
+                                     (current_user.id == 1)
+                                     ).first()
+
+    if not job:
+        abort(404)
+
+    db_sess.delete(job)
+    db_sess.commit()
+    return redirect('/')
+
+
 def main():
     db_session.global_init("db/mars_explorer.db")
-    #капитан
+    # капитан
     user = User()
+    user.id = 1
     user.name = "Ridley"
     user.surname = "Scott"
     user.age = 21
@@ -103,10 +157,13 @@ def main():
     user.speciality = "research engineer"
     user.address = "module_1"
     user.email = "scott_chief@mars.org"
+    user.hashed_password = 123
     db_sess = db_session.create_session()
     db_sess.add(user)
     db_sess.commit()
-    #первая работа
+
+
+    # первая работа
     job = Jobs()
     job.team_leader = 1
     job.job = "deployment of residential modules 1 and 2"
